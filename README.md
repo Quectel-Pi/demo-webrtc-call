@@ -20,6 +20,7 @@ and never passes through a server.
 - Live statistics: bitrate, resolution, frame rate, packet loss, jitter, RTT, codec
 - Camera / microphone switching, mute, camera off, video bitrate cap
 - No app required — any modern browser works
+- UI in Chinese or English, switchable at runtime and remembered per browser
 - `start.sh` prints the phone URL and a QR code
 - Built-in self-checks: signaling test, media-path self-test, capture probe, `/healthz` status API
 

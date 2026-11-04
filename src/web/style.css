@@ -40,6 +40,7 @@ button:disabled{opacity:.45; cursor:not-allowed}
 button.primary{background:var(--accent); border-color:var(--accent); font-weight:600}
 button.primary:hover:not(:disabled){background:#3b9bff}
 button.ghost{background:transparent}
+button.lang{min-width:56px; font-variant-numeric:tabular-nums; letter-spacing:.3px}
 
 /* 布局 */
 main{flex:1 1 auto; display:flex; min-height:0}

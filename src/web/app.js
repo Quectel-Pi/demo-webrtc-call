@@ -36,10 +36,12 @@ function log(msg, isErr) {
   (isErr ? console.warn : console.log)(msg);
 }
 
-function setSig(state, text) {
+function setSig(state, key, vars) {
+  S.sig = { state, key, vars };
   const dot = $('#sigDot');
   dot.className = 'dot' + (state === 'ok' ? ' ok' : state === 'wait' ? ' wait' : '');
-  $('#sigText').textContent = text;
+  const el = $('#sigText');
+  if (el) el.textContent = t(key, vars);
 }
 
 const kbps = (bytes, dt) => (dt > 0 ? Math.round((bytes * 8) / dt / 1000) : 0);
@@ -65,7 +67,7 @@ async function ensureAudio() {
       if (v.paused || v.readyState < 2) await v.play();
     } catch (e) {
       blocked = true;
-      log(`远端声音被浏览器拦截（${e.name}）→ 点「开启声音」`, true);
+      log(t('log.audioBlocked', { name: e.name }), true);
     }
   }
   showSoundBtn(blocked);
@@ -86,10 +88,10 @@ async function primeVideo(v) {
       v.muted = true;
       await v.play();
       showSoundBtn(true);
-      log(`画面已显示（静音）；点「开启声音」或屏幕任意处解锁声音（${e.name}）`);
+      log(t('log.videoMuted', { name: e.name }));
       return;
     } catch (e2) {
-      log(`远端画面无法播放：${e2.name}`, true);
+      log(t('log.videoFail', { name: e2.name }), true);
     }
   }
   showSoundBtn(true);
@@ -99,7 +101,7 @@ function installAudioUnlock() {
   const once = async () => {
     if (await ensureAudio()) {
       ['touchend', 'click', 'pointerup'].forEach((ev) => document.removeEventListener(ev, once, true));
-      log('音频已解锁');
+      log(t('log.audioUnlocked'));
     }
   };
   ['touchend', 'click', 'pointerup'].forEach((ev) => document.addEventListener(ev, once, true));
@@ -125,13 +127,13 @@ function synthStream() {
     ctx.fillStyle = '#e6edf3';
     ctx.font = '600 44px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('SYNTHETIC TEST PATTERN', cv.width / 2, 96);
+    ctx.fillText(t('synth.title'), cv.width / 2, 96);
     ctx.font = '500 30px ui-monospace, monospace';
     ctx.fillStyle = '#22c55e';
     ctx.fillText(`frame ${Math.round(t * 30)}  |  ${cv.width}x${cv.height}@30`, cv.width / 2, cv.height - 70);
     ctx.fillStyle = '#8b98a7';
     ctx.font = '24px system-ui, sans-serif';
-    ctx.fillText('无需摄像头的兜底信号（用于通路自检）', cv.width / 2, cv.height - 30);
+    ctx.fillText(t('synth.note'), cv.width / 2, cv.height - 30);
   }, 33);
 
   const tracks = [...cv.captureStream(30).getVideoTracks()];
@@ -145,7 +147,7 @@ function synthStream() {
     osc.connect(gain); gain.connect(dst); osc.start();
     tracks.push(...dst.stream.getAudioTracks());
   } catch (e) {
-    log('合成音频不可用：' + e.message, true);
+    log(t('log.synthAudio', { msg: e.message }), true);
   }
   return new MediaStream(tracks);
 }
@@ -166,11 +168,14 @@ async function openMedia({ videoId, audioId } = {}) {
   };
   try {
     const stream = await navigator.mediaDevices.getUserMedia(base);
-    log(`摄像头/麦克风已打开：${stream.getVideoTracks()[0]?.label || '-'} / ${stream.getAudioTracks()[0]?.label || '-'}`);
+    log(t('log.mediaOk', {
+      video: stream.getVideoTracks()[0]?.label || '-',
+      audio: stream.getAudioTracks()[0]?.label || '-',
+    }));
     return { stream, synthetic: false };
   } catch (err) {
     S.mediaError = `${err.name}: ${err.message}`;
-    log(`getUserMedia 失败（${err.name}: ${err.message}）→ 改用合成测试信号`, true);
+    log(t('log.mediaFail', { name: err.name, msg: err.message }), true);
     return { stream: synthStream(), synthetic: true };
   }
 }
@@ -189,8 +194,8 @@ async function listDevices() {
     });
     if (prev) sel.value = prev;
   };
-  fill($('#camSel'), 'videoinput', '摄像头');
-  fill($('#micSel'), 'audioinput', '麦克风');
+  fill($('#camSel'), 'videoinput', t('device.camera'));
+  fill($('#micSel'), 'audioinput', t('device.mic'));
 }
 
 /* ---------------------------------------------------------------- 画面格 */
@@ -201,10 +206,12 @@ function createTile(name, isLocal) {
     <video autoplay playsinline webkit-playsinline x5-playsinline ${isLocal ? 'muted' : ''}></video>
     <div class="label"><span class="nm"></span><span class="tag"></span></div>
     <div class="badge">—</div>
-    <div class="off">摄像头已关闭</div>
+    <div class="off">${t('tile.camoff')}</div>
     <div class="state"><span class="mic">🎤</span><span class="cam">📷</span></div>`;
   el.querySelector('.nm').textContent = name;
-  el.querySelector('.tag').textContent = isLocal ? '本端' : '连接中';
+  const tag = el.querySelector('.tag');
+  tag.dataset.k = isLocal ? 'tile.local' : 'tile.connecting';
+  tag.textContent = t(tag.dataset.k);
   el.querySelector('.badge').textContent = isLocal ? 'localhost' : '—';
   return el;
 }
@@ -212,7 +219,7 @@ function createTile(name, isLocal) {
 function attachLocalTile(stream) {
   let tile = document.querySelector('.tile.local');
   if (!tile) {
-    tile = createTile(`${S.name || '我'}`, true);
+    tile = createTile(S.name || t('name.me'), true);
     $('#grid').prepend(tile);
   }
   tile.querySelector('video').srcObject = stream;
@@ -220,7 +227,7 @@ function attachLocalTile(stream) {
   tile.classList.toggle('camoff', !v || !v.enabled);
   tile.querySelector('.badge').textContent = v
     ? `${v.getSettings().width || '?'}x${v.getSettings().height || '?'}`
-    : 'no video';
+    : t('tile.novideo');
   $('#hint')?.remove();
 }
 
@@ -264,7 +271,7 @@ function makePeer(id, name, polite) {
     if (peer.polite) {
       // polite 一方：会话还没建立时不主动 offer
       if (pc.connectionState !== 'connected') {
-        log(`${peer.name}：我是 polite 一方，等对方 offer（本端轨道随 answer 一起发）`);
+        log(t('log.polite', { name: peer.name }));
         return;
       }
     }
@@ -272,9 +279,9 @@ function makePeer(id, name, polite) {
       peer.makingOffer = true;
       await pc.setLocalDescription();
       send({ type: 'signal', to: id, data: { description: pc.localDescription } });
-      log(`→ offer 给 ${peer.name}（${pc.localDescription.sdp.length}B）`);
+      log(t('log.offer', { name: peer.name, len: pc.localDescription.sdp.length }));
     } catch (e) {
-      log('offer 失败：' + e.message, true);
+      log(t('log.offerFail', { msg: e.message }), true);
     } finally {
       peer.makingOffer = false;
     }
@@ -285,14 +292,14 @@ function makePeer(id, name, polite) {
   };
 
   pc.ontrack = ({ track, streams }) => {
-    log(`← ${peer.name} 的 ${track.kind} 轨道 (${track.label || 'no-label'})`);
+    log(t('log.track', { name: peer.name, kind: track.kind, label: track.label || 'no-label' }));
     peer.remoteStream.addTrack(track);
     const video = peer.tile.querySelector('video');
     if (video.srcObject !== peer.remoteStream) video.srcObject = peer.remoteStream;
     // 轨道到达即尝试播放，被拒则静音播 + 提示用户点「开启声音」
     primeVideo(video);
-    track.onmute = () => log(`${peer.name} 的 ${track.kind} 静音`);
-    track.onunmute = () => log(`${peer.name} 的 ${track.kind} 恢复`);
+    track.onmute = () => log(t('log.trackMute', { name: peer.name, kind: track.kind }));
+    track.onunmute = () => log(t('log.trackUnmute', { name: peer.name, kind: track.kind }));
     if (track.kind === 'video') peer.tile.classList.remove('camoff');
     $('#hint')?.remove();
   };
@@ -301,19 +308,21 @@ function makePeer(id, name, polite) {
     const st = pc.connectionState;
     peer.tile.classList.toggle('connected', st === 'connected');
     peer.tile.classList.toggle('connecting', st === 'connecting' || st === 'new');
-    peer.tile.querySelector('.tag').textContent = st;
-    log(`${peer.name} 连接状态 → ${st}`);
+    const tag = peer.tile.querySelector('.tag');
+    tag.dataset.k = STRINGS.zh[`conn.${st}`] ? `conn.${st}` : '';
+    tag.textContent = tag.dataset.k ? t(tag.dataset.k) : st;
+    log(t('log.connState', { name: peer.name, state: st }));
     if (st === 'failed') {
-      log(`${peer.name} 连接失败，尝试 ICE 重启`, true);
+      log(t('log.connFail', { name: peer.name }), true);
       try { pc.restartIce(); } catch (_) {}
     }
   };
 
   pc.oniceconnectionstatechange = () => {
-    log(`${peer.name} ICE → ${pc.iceConnectionState}`);
+    log(t('log.ice', { name: peer.name, state: pc.iceConnectionState }));
   };
 
-  pc.onicecandidateerror = (e) => log(`ICE 候选错误 ${e.errorCode} ${e.errorText}`, true);
+  pc.onicecandidateerror = (e) => log(t('log.iceErr', { code: e.errorCode, text: e.errorText }), true);
 
   applyRateCap(peer);
   (peer.tile.querySelector('video')).onclick = () => peer.tile.querySelector('video').play().catch(() => {});
@@ -326,7 +335,7 @@ async function onDescription(peer, description) {
   const offerCollision = description.type === 'offer' && !readyForOffer;
   peer.ignoreOffer = !peer.polite && offerCollision;
   if (peer.ignoreOffer) {
-    log(`忽略与 ${peer.name} 的 offer 冲突（我是 impolite 一方）`);
+    log(t('log.ignoreOffer', { name: peer.name }));
     return;
   }
   peer.answerPending = description.type === 'answer';
@@ -335,7 +344,7 @@ async function onDescription(peer, description) {
   if (description.type === 'offer') {
     await pc.setLocalDescription();
     send({ type: 'signal', to: peer.id, data: { description: pc.localDescription } });
-    log(`→ answer 给 ${peer.name}`);
+    log(t('log.answer', { name: peer.name }));
   }
 }
 
@@ -343,7 +352,7 @@ async function onCandidate(peer, candidate) {
   try {
     await peer.pc.addIceCandidate(candidate);
   } catch (e) {
-    if (!peer.ignoreOffer) log('addIceCandidate 失败：' + e.message, true);
+    if (!peer.ignoreOffer) log(t('log.candFail', { msg: e.message }), true);
   }
 }
 
@@ -353,12 +362,13 @@ function dropPeer(id, reason) {
   try { peer.pc.close(); } catch (_) {}
   peer.tile?.remove();
   S.peers.delete(id);
-  log(`✖ ${peer.name} 断开（${reason}）`);
+  log(t('log.peerLeave', { name: peer.name, reason: t(reason) }));
   if (S.peers.size === 0 && S.joined) {
     const hint = document.createElement('div');
     hint.className = 'hint';
     hint.id = 'hint';
-    hint.innerHTML = `<h3>等待对端加入</h3><p class="muted">房间「${S.room}」里现在只有你。另一台设备用同样房间名加入即可。</p>`;
+    hint.dataset.wait = '1';
+    hint.innerHTML = `<h3>${t('hint.waitTitle')}</h3><p class="muted">${t('hint.waitDesc', { room: S.room })}</p>`;
     $('.stage').appendChild(hint);
   }
 }
@@ -376,9 +386,9 @@ async function applyRateCap(peer) {
       delete params.encodings[0].maxBitrate;
     }
     await peer.senders.video.setParameters(params);
-    log(`→ ${peer.name} 视频码率上限 ${S.rateCap ? S.rateCap + ' kbps' : '不限'}`);
+    log(t('log.rateCap', { name: peer.name, cap: S.rateCap ? `${S.rateCap} kbps` : t('log.rateCapNone') }));
   } catch (e) {
-    log('setParameters 失败：' + e.message, true);
+    log(t('log.setParamsFail', { msg: e.message }), true);
   }
 }
 
@@ -390,25 +400,25 @@ function send(obj) {
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const url = `${proto}://${location.host}/ws`;
-  setSig('wait', '连接信令…');
+  setSig('wait', 'sig.connecting');
   const ws = new WebSocket(url);
   S.ws = ws;
 
   ws.onopen = () => {
-    log('信令已连接 ' + url);
+    log(t('log.sigOpen', { url }));
     send({ type: 'join', room: S.room, name: S.name || defaultName() });
   };
   ws.onclose = () => {
-    setSig('', '信令断开');
-    log('信令断开', true);
+    setSig('', 'sig.closed');
+    log(t('log.sigClosed'), true);
     if (S.joined) {
       S.joined = false;
-      [...S.peers.keys()].forEach((id) => dropPeer(id, '信令断开'));
+      [...S.peers.keys()].forEach((id) => dropPeer(id, 'reason.signal'));
       $('#joinBtn').disabled = false;
       $('#leaveBtn').disabled = true;
     }
   };
-  ws.onerror = () => { setSig('', '信令错误'); log('信令连接错误', true); };
+  ws.onerror = () => { setSig('', 'sig.error'); log(t('log.sigError'), true); };
 
   ws.onmessage = async (ev) => {
     let m;
@@ -417,8 +427,8 @@ function connect() {
     if (m.type === 'welcome') {
       S.myId = m.id;
       S.joined = true;
-      setSig('ok', `信令已连接 · 我是 ${m.id}`);
-      log(`进入房间「${m.room}」id=${m.id}，已有对端 ${m.peers.length} 个（上限 ${m.limit}）`);
+      setSig('ok', 'sig.connected', { id: m.id });
+      log(t('log.welcome', { room: m.room, id: m.id, n: m.peers.length, limit: m.limit }));
       $('#joinBtn').disabled = true;
       $('#leaveBtn').disabled = false;
       ['micBtn', 'camBtn', 'camSel', 'micSel', 'rateSel'].forEach((s) => { $(`#${s}`).disabled = false; });
@@ -428,11 +438,11 @@ function connect() {
     }
     if (m.type === 'peer-join') {
       const p = m.peer;
-      log(`＋ ${p.name} (${p.id}) 加入房间`);
+      log(t('log.peerJoin', { name: p.name, id: p.id }));
       makePeer(p.id, p.name, S.myId > p.id);
       return;
     }
-    if (m.type === 'peer-leave') { dropPeer(m.id, '离开房间'); return; }
+    if (m.type === 'peer-leave') { dropPeer(m.id, 'reason.leave'); return; }
     if (m.type === 'peer-state') {
       const peer = S.peers.get(m.id);
       if (peer) {
@@ -451,11 +461,11 @@ function connect() {
         if (d.description) await onDescription(peer, d.description);
         else if ('candidate' in d) await onCandidate(peer, d.candidate);
       } catch (e) {
-        log('信令处理异常：' + e.message, true);
+        log(t('log.signalFail', { msg: e.message }), true);
       }
       return;
     }
-    if (m.type === 'error') { log('服务器：' + m.message, true); return; }
+    if (m.type === 'error') { log(t('log.server', { msg: m.message }), true); return; }
   };
 }
 
@@ -503,7 +513,7 @@ async function collectStats() {
   const summary = [];
   const now = performance.now();
   if (!S.peers.size) {
-    box.innerHTML = '<p class="muted">房间内暂无对端</p>';
+    box.innerHTML = `<p class="muted">${t('stats.none')}</p>`;
     postReport(summary);            // 没对端也上报，便于远程确认本端摄像头/麦克风状态
     return;
   }
@@ -578,12 +588,12 @@ async function collectStats() {
       <div class="peer">
         <span class="n">${escapeHtml(peer.name)} <span class="muted">· ${o.conn}</span></span>
         <dl>
-          <dt>通话编解码</dt><dd>${o.codec}</dd>
-          <dt>接收</dt><dd>${o.inK} kbps · ${o.inFps} fps · ${o.inRes}</dd>
-          <dt>发送</dt><dd>${o.outK} kbps · ${o.fps} fps · ${o.res}</dd>
-          <dt>丢包率</dt><dd class="${cls(o.loss, 2, 8)}">${o.loss.toFixed(2)} %</dd>
-          <dt>抖动</dt><dd class="${cls(o.jitter, 30, 100)}">${o.jitter.toFixed(1)} ms</dd>
-          <dt>RTT</dt><dd class="${o.rtt == null ? '' : cls(o.rtt, 60, 200)}">${o.rtt == null ? '—' : o.rtt.toFixed(0) + ' ms'}</dd>
+          <dt>${t('stats.codec')}</dt><dd>${o.codec}</dd>
+          <dt>${t('stats.in')}</dt><dd>${o.inK} kbps · ${o.inFps} fps · ${o.inRes}</dd>
+          <dt>${t('stats.out')}</dt><dd>${o.outK} kbps · ${o.fps} fps · ${o.res}</dd>
+          <dt>${t('stats.loss')}</dt><dd class="${cls(o.loss, 2, 8)}">${o.loss.toFixed(2)} %</dd>
+          <dt>${t('stats.jitter')}</dt><dd class="${cls(o.jitter, 30, 100)}">${o.jitter.toFixed(1)} ms</dd>
+          <dt>${t('stats.rtt')}</dt><dd class="${o.rtt == null ? '' : cls(o.rtt, 60, 200)}">${o.rtt == null ? '—' : o.rtt.toFixed(0) + ' ms'}</dd>
         </dl>
       </div>`);
   }
@@ -625,7 +635,7 @@ async function join() {
 
 function leave() {
   send({ type: 'bye' });
-  [...S.peers.keys()].forEach((id) => dropPeer(id, '主动离开'));
+  [...S.peers.keys()].forEach((id) => dropPeer(id, 'reason.self'));
   S.ws?.close();
   S.joined = false;
   clearInterval(S.statsTimer);
@@ -641,7 +651,7 @@ async function swapTrack(kind, newTrack) {
   for (const peer of S.peers.values()) {
     const sender = peer.senders[kind];
     if (sender) {
-      try { await sender.replaceTrack(newTrack || null); } catch (e) { log(`replaceTrack(${kind}) 失败：` + e.message, true); }
+      try { await sender.replaceTrack(newTrack || null); } catch (e) { log(t('log.replaceFail', { kind, msg: e.message }), true); }
     }
   }
 }
@@ -664,9 +674,9 @@ async function switchDevice(kind) {
     if (ls) { [...ls.getTracks()].filter((t) => t.kind === track.kind).forEach((t) => ls.removeTrack(t)); ls.addTrack(track); }
     await swapTrack(kind, track);
     if (isCam) attachLocalTile(ls || new MediaStream([track]));
-    log(`已切换${isCam ? '摄像头' : '麦克风'}：${track.label}`);
+    log(t('log.deviceSwitched', { kind: isCam ? t('device.camera') : t('device.mic'), label: track.label }));
   } catch (e) {
-    log(`切换设备失败：${e.name} ${e.message}`, true);
+    log(t('log.deviceSwitchFail', { name: e.name, msg: e.message }), true);
   }
 }
 
@@ -677,7 +687,7 @@ function toggleMic() {
   const btn = $('#micBtn');
   btn.classList.toggle('on', on);
   btn.classList.toggle('off', !on);
-  btn.textContent = on ? '🎤 麦克风' : '🔇 已静音';
+  btn.textContent = on ? t('ctl.mic') : t('ctl.micOff');
   send({ type: 'state', mic: on, cam: !!S.cameraTrack?.enabled });
 }
 
@@ -688,13 +698,56 @@ function toggleCam() {
   const btn = $('#camBtn');
   btn.classList.toggle('on', on);
   btn.classList.toggle('off', !on);
-  btn.textContent = on ? '📷 摄像头' : '🚫 摄像头关';
+  btn.textContent = on ? t('ctl.cam') : t('ctl.camOff');
   document.querySelector('.tile.local')?.classList.toggle('camoff', !on);
   send({ type: 'state', mic: !!S.micTrack?.enabled, cam: on });
 }
 
+/* ---------------------------------------------- 手机访问横幅 / 语言切换 */
+function renderBanner(url) {
+  S.tunnelUrl = url;
+  const b = $('#phoneBanner');
+  if (!b) return;
+  b.innerHTML = `${t('banner.phone')} <code></code><button class="ghost" id="copyUrl">${t('banner.copy')}</button>`;
+  b.querySelector('code').textContent = url;
+  b.classList.remove('hidden');
+  $('#copyUrl').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      log(t('banner.copied'));
+    } catch (e) {
+      log(t('banner.copyFail', { url }), true);
+    }
+  };
+}
+
+/* 切换语言后重绘由 JS 生成的文案（静态部分由 data-i18n 处理） */
+function refreshDynamicTexts() {
+  if (S.sig) $('#sigText').textContent = t(S.sig.key, S.sig.vars);
+
+  document.querySelectorAll('.tile').forEach((tile) => {
+    const tag = tile.querySelector('.tag');
+    if (tag && tag.dataset.k) tag.textContent = t(tag.dataset.k);
+    const off = tile.querySelector('.off');
+    if (off) off.textContent = t('tile.camoff');
+  });
+
+  if (S.micTrack) $('#micBtn').textContent = S.micTrack.enabled ? t('ctl.mic') : t('ctl.micOff');
+  if (S.cameraTrack) $('#camBtn').textContent = S.cameraTrack.enabled ? t('ctl.cam') : t('ctl.camOff');
+
+  document.querySelectorAll('#hint[data-wait]').forEach((h) => {
+    const h3 = h.querySelector('h3');
+    const p = h.querySelector('.muted');
+    if (h3) h3.textContent = t('hint.waitTitle');
+    if (p) p.textContent = t('hint.waitDesc', { room: S.room });
+  });
+
+  if (S.tunnelUrl) renderBanner(S.tunnelUrl);
+}
+
 /* ------------------------------------------------------------------ 启动 */
 window.addEventListener('DOMContentLoaded', async () => {
+  initLang();
   $('#roomInput').value = S.room;
   $('#nameInput').value = S.name || '';
   $('#nameInput').placeholder = defaultName();
@@ -704,6 +757,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   $('#joinBtn').onclick = join;
   $('#leaveBtn').onclick = leave;
+  $('#langBtn').onclick = toggleLang;
+  window.addEventListener('langchange', () => {
+    refreshDynamicTexts();
+    if (S.joined) collectStats();
+  });
   $('#micBtn').onclick = toggleMic;
   $('#camBtn').onclick = toggleCam;
   // iOS：任何一次点按都尝试解锁远端声音；仍被拒时按钮常亮
@@ -723,24 +781,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('beforeunload', () => { try { send({ type: 'bye' }); } catch (_) {} });
 
   listDevices().catch(() => {});
-  log(`页面就绪 ${location.href}`);
+  log(t('log.ready', { url: location.href }));
 
   // 顶部显示手机访问地址（隧道地址由 start.sh 写入 local/tunnel-url.txt）
   fetch('/tunnel').then((r) => (r.ok ? r.json() : null)).then((d) => {
     if (!d || !d.url) return;
-    const url = `${d.url}/?room=${encodeURIComponent(S.room)}`;
-    const b = $('#phoneBanner');
-    b.innerHTML = `📱 手机访问 <code></code><button class="ghost" id="copyUrl">复制</button>`;
-    b.querySelector('code').textContent = url;
-    b.classList.remove('hidden');
-    $('#copyUrl').onclick = async () => {
-      try {
-        await navigator.clipboard.writeText(url);
-        log('手机访问地址已复制到剪贴板');
-      } catch (e) {
-        log('复制失败，请手动选中复制：' + url, true);
-      }
-    };
+    renderBanner(`${d.url}/?room=${encodeURIComponent(S.room)}`);
   }).catch(() => {});
 
   if (QS.get('autostart') === '1') join();
