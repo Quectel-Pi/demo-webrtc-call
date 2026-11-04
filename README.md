@@ -188,17 +188,6 @@ curl -s http://localhost:8080/healthz              # live state of each client
 
 RTT 1–5 ms, 0 % packet loss.
 
-## References
-
-The APIs and negotiation flow follow the W3C specification and the webrtc.org documentation.
-The code in this repository is original and does not copy sources from the webrtc.org samples repository.
-
-- W3C WebRTC spec (`RTCPeerConnection` / `getUserMedia` / `getStats`): https://w3c.github.io/webrtc-pc/
-- Application flow overview: https://webrtc.org/getting-started/overview
-- Peer connections and signaling: https://webrtc.org/getting-started/peer-connections
-- Media devices: https://webrtc.org/getting-started/media-devices
-- Official samples (BSD-3-Clause, for reference only): https://webrtc.github.io/samples
-
 ## Reporting Issues
 
 If you run into problems, post on the [Quectel official forum](https://forumschinese.quectel.com/c/quectel-pi/58).

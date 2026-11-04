@@ -54,7 +54,7 @@ HTTPS 地址；音视频是 P2P 直连，不经过服务器。
 ```
 sudo apt update
 sudo apt install -y git
-git clone https://github.com/Quectel-Pi/demo-webrtc-av-call.git（待定）
+git clone https://github.com/Quectel-Pi/demo-webrtc-av-call.git
 ```
 
 当前目录会生成 `demo-webrtc-av-call` 文件夹。
@@ -181,15 +181,6 @@ curl -s http://localhost:8080/healthz              # 各端实时状态
 
 RTT 1~5 ms，丢包 0%。
 
-## 参考资料
-
-接口和协商流程按 W3C 规范与 webrtc.org 文档实现，代码为本项目自研，未复制 webrtc.org 示例仓库的源码。
-
-- W3C WebRTC 规范（`RTCPeerConnection` / `getUserMedia` / `getStats`）：https://w3c.github.io/webrtc-pc/
-- 应用流程概览：https://webrtc.org/getting-started/overview
-- Peer connection 与信令：https://webrtc.org/getting-started/peer-connections
-- 媒体设备：https://webrtc.org/getting-started/media-devices
-- 官方示例（BSD-3-Clause，仅供对照）：https://webrtc.github.io/samples
 
 ## 报告问题
 
