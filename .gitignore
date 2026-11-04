@@ -1,0 +1,13 @@
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 运行时目录（日志、pid、隧道地址、二维码、浏览器 profile）
+local/
+
+# 证书（每块板子自己生成，不提交）
+src/certs/
+
+# 日志
+*.log
+log_files/

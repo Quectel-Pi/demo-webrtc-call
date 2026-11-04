@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebRTC Audio/Video Call · Quectel Pi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="dot" id="sigDot"></span>
+    <strong>WebRTC 音视频演示</strong>
+    <span class="sub" id="sigText">未连接信令</span>
+  </div>
+  <div class="joinrow">
+    <label>房间 <input id="roomInput" value="demo" size="8" autocomplete="off"></label>
+    <label>本端名称 <input id="nameInput" value="" size="10" autocomplete="off" placeholder="板子 / PC"></label>
+    <button id="joinBtn" class="primary">加入房间</button>
+    <button id="leaveBtn" class="ghost" disabled>离开</button>
+  </div>
+  <div id="phoneBanner" class="banner hidden"></div>
+</header>
+
+<main>
+  <section class="stage">
+    <div id="grid" class="grid"></div>
+    <div id="hint" class="hint">
+      <h3>开始</h3>
+      <ol>
+        <li>点「加入房间」，允许摄像头和麦克风。</li>
+        <li>另一台设备打开同一地址，用相同房间名加入。</li>
+        <li>连上后右侧可看码率、分辨率、丢包、RTT。</li>
+      </ol>
+      <p class="muted">一个房间最多 4 路。</p>
+    </div>
+    <button id="soundBtn" class="sound hidden">🔊 点一下开启对方声音</button>
+  </section>
+
+  <aside class="panel">
+    <div class="ctl">
+      <button id="micBtn" class="toggle on" disabled>🎤 麦克风</button>
+      <button id="camBtn" class="toggle on" disabled>📷 摄像头</button>
+    </div>
+
+    <div class="field">
+      <label for="camSel">摄像头</label>
+      <select id="camSel" disabled></select>
+    </div>
+    <div class="field">
+      <label for="micSel">麦克风</label>
+      <select id="micSel" disabled></select>
+    </div>
+    <div class="field">
+      <label for="rateSel">视频码率上限</label>
+      <select id="rateSel" disabled>
+        <option value="800">800 kbps（弱网 / 720p30 够用）</option>
+        <option value="1500" selected>1.5 Mbps（默认 / 720p30）</option>
+        <option value="3000">3 Mbps（1080p30）</option>
+        <option value="0">不限制</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="stunInput">ICE 服务器（可选，逗号分隔）</label>
+      <input id="stunInput" placeholder="stun:stun.l.google.com:19302" autocomplete="off">
+    </div>
+
+    <h4>实时统计</h4>
+    <div id="stats" class="stats"><p class="muted">加入房间后显示</p></div>
+
+    <h4>日志</h4>
+    <pre id="log" class="log"></pre>
+  </aside>
+</main>
+
+<audio id="remoteAudioSink" autoplay playsinline style="display:none"></audio>
+<script src="app.js"></script>
+</body>
+</html>

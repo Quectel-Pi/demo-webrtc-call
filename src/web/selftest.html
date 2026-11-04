@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>WebRTC Self-test · demo-webrtc-av-call</title>
+<style>
+  :root{--bg:#0d1117;--card:#171f2b;--line:#26313f;--fg:#e6edf3;--muted:#8b98a7;--ok:#22c55e;--bad:#ef4444;--warn:#f59e0b;--mono:ui-monospace,Consolas,monospace}
+  body{margin:0;padding:26px;background:var(--bg);color:var(--fg);font:14px/1.6 system-ui,"Noto Sans CJK SC","Microsoft YaHei",sans-serif}
+  h1{font-size:17px;margin:0 0 4px} .muted{color:var(--muted)}
+  #badge{display:inline-block;margin:14px 0;padding:8px 16px;border-radius:9px;font-weight:700;letter-spacing:.03em;background:#1d2836}
+  #badge.pass{background:rgba(34,197,94,.18);color:#7ee2a8;border:1px solid rgba(34,197,94,.5)}
+  #badge.fail{background:rgba(239,68,68,.18);color:#ffb4b4;border:1px solid rgba(239,68,68,.5)}
+  #badge.running{background:rgba(245,158,11,.16);color:#ffd48a;border:1px solid rgba(245,158,11,.45)}
+  ol{padding-left:22px} li{margin:3px 0;font-family:var(--mono);font-size:12.5px}
+  li.ok::marker{color:var(--ok)} li.bad::marker{color:var(--bad)}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:9px;padding:12px;overflow:auto;font-size:12px;color:#9fb0c4}
+  table{border-collapse:collapse;margin-top:10px;font-family:var(--mono);font-size:12.5px}
+  td,th{border:1px solid var(--line);padding:5px 10px;text-align:left;vertical-align:top}
+  th{color:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+<h1>WebRTC 通路自检</h1>
+<p class="muted">同一页面内起两个独立的 PeerConnection + 两条独立的 WebSocket 信令连接，走完
+「信令 → SDP/ICE 交换 → DTLS/SRTP 建立 → 双向音视频收包」的全链路，用于上板前/上板后快速判定环境是否正常。
+媒体用 canvas + 正弦音合成，<b>不需要摄像头和麦克风权限</b>。</p>
+
+<div id="badge" class="running">RUNNING…</div>
+<div id="steps"><ol id="logList"></ol></div>
+<table id="metrics"><tbody></tbody></table>
+<pre id="dump">{}</pre>
+<video id="vA" autoplay muted playsinline style="width:320px;border:1px solid #26313f;border-radius:8px"></video>
+<video id="vB" autoplay muted playsinline style="width:320px;border:1px solid #26313f;border-radius:8px"></video>
+
+<script>
+'use strict';
+const R = { status: 'running', steps: [], metrics: {}, error: null };
+window.__selftest = R;
+
+const badge = document.getElementById('badge');
+const list = document.getElementById('logList');
+const dump = document.getElementById('dump');
+
+function render() {
+  badge.textContent = R.status.toUpperCase();
+  badge.className = R.status;
+  list.innerHTML = R.steps.map((s) =>
+    `<li class="${s.ok ? 'ok' : 'bad'}">${s.ok ? '✓' : '✗'} ${s.msg}</li>`).join('');
+  const rows = Object.entries(R.metrics).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
+  document.querySelector('#metrics tbody').innerHTML = rows;
+  dump.textContent = JSON.stringify(R, null, 2);
+  window.__selftest = JSON.parse(JSON.stringify(R));
+}
+
+function step(ok, msg) { R.steps.push({ ok, msg, t: Math.round(performance.now()) }); render(); return ok; }
+function fail(msg) { R.status = 'fail'; R.error = msg; step(false, msg); render(); }
+
+function synthStream() {
+  const cv = document.createElement('canvas');
+  cv.width = 640; cv.height = 360;
+  const ctx = cv.getContext('2d');
+  let n = 0;
+  setInterval(() => {
+    n++;
+    ctx.fillStyle = `hsl(${(n * 3) % 360} 70% 25%)`;
+    ctx.fillRect(0, 0, 640, 360);
+    ctx.fillStyle = '#fff'; ctx.font = '600 28px sans-serif';
+    ctx.fillText('frame ' + n, 24, 60);
+  }, 33);
+  const tracks = [...cv.captureStream(30).getVideoTracks()];
+  try {
+    const ac = new AudioContext();
+    const osc = ac.createOscillator(); const g = ac.createGain(); const dst = ac.createMediaStreamDestination();
+    osc.frequency.value = 440; g.gain.value = 0.05; osc.connect(g); g.connect(dst); osc.start();
+    tracks.push(...dst.stream.getAudioTracks());
+    ac.resume?.().catch(() => {});
+  } catch (e) { /* 音频不可用不影响视频通路的判定 */ }
+  return new MediaStream(tracks);
+}
+
+class Endpoint {
+  constructor(tag, room, name) {
+    this.tag = tag; this.room = room; this.name = name;
+    this.id = null; this.peerId = null; this.ws = null; this.pc = null;
+    this.stream = synthStream();
+    this.makingOffer = false; this.ignoreOffer = false; this.answerPending = false;
+    this.connected = false; this.remoteTracks = 0;
+  }
+
+  connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(`${proto}://${location.host}/ws`);
+      this.ws = ws;
+      const to = setTimeout(() => reject(new Error(this.tag + ' 信令连接超时')), 8000);
+      ws.onopen = () => ws.send(JSON.stringify({ type: 'join', room: this.room, name: this.name }));
+      ws.onerror = () => { clearTimeout(to); reject(new Error(this.tag + ' 信令连接错误')); };
+      ws.onmessage = (ev) => {
+        const m = JSON.parse(ev.data);
+        if (m.type === 'welcome') {
+          clearTimeout(to);
+          this.id = m.id;
+          step(true, `${this.tag} 收到 welcome id=${m.id}，房间已有 ${m.peers.length} 人`);
+          m.peers.forEach((p) => this.attach(p.id, p.name));
+          resolve(m);
+        } else if (m.type === 'peer-join') {
+          step(true, `${this.tag} 看到 ${m.peer.name} 加入`);
+          this.attach(m.peer.id, m.peer.name);
+        } else if (m.type === 'signal') {
+          this.onSignal(m.from, m.data || {});
+        } else if (m.type === 'error') {
+          step(false, `${this.tag} 服务器错误：${m.message}`);
+        }
+      };
+    });
+  }
+
+  send(o) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify(o)); }
+
+  attach(peerId, peerName) {
+    if (this.pc && this.peerId === peerId) return;      // 防止 welcome / peer-join 重复建连
+    this.peerId = peerId; this.peerName = peerName;
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    this.pc = pc;
+    for (const t of this.stream.getTracks()) pc.addTrack(t, this.stream);
+
+    pc.onicecandidate = ({ candidate }) => this.send({ type: 'signal', to: peerId, data: { candidate } });
+    pc.onnegotiationneeded = async () => {
+      if (this.tag === 'B') return;            // 只有 A 主动 offer，B 用 answer 带上自己的媒体
+      try {
+        this.makingOffer = true;
+        await pc.setLocalDescription();
+        this.send({ type: 'signal', to: peerId, data: { description: pc.localDescription } });
+        step(true, `A 发出 offer (${pc.localDescription.sdp.length} B)`);
+      } finally { this.makingOffer = false; }
+    };
+    pc.ontrack = ({ track }) => {
+      this.remoteTracks++;
+      step(true, `${this.tag} 收到远端 ${track.kind} 轨道`);
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') this.connected = true;
+      step(pc.connectionState !== 'failed', `${this.tag} 连接状态 ${pc.connectionState}`);
+    };
+    pc.onicecandidateerror = (e) => step(false, `${this.tag} ICE 错误 ${e.errorCode} ${e.errorText}`);
+  }
+
+  async onSignal(from, d) {
+    if (!this.pc) this.attach(from, from);
+    if (d.description) {
+      const desc = d.description;
+      const pc = this.pc;
+      const ready = !this.makingOffer && (pc.signalingState === 'stable' || this.answerPending);
+      const collision = desc.type === 'offer' && !ready;
+      this.ignoreOffer = !this.polite() && collision;
+      if (this.ignoreOffer) return;
+      this.answerPending = desc.type === 'answer';
+      await pc.setRemoteDescription(desc);
+      this.answerPending = false;
+      if (desc.type === 'offer') {
+        await pc.setLocalDescription();
+        this.send({ type: 'signal', to: from, data: { description: pc.localDescription } });
+        step(true, `${this.tag} 回复 answer（含本端媒体）`);
+      }
+    } else if ('candidate' in d) {
+      try { await this.pc.addIceCandidate(d.candidate); } catch (e) { /* ignore */ }
+    }
+  }
+
+  polite() { return this.tag === 'B'; }
+
+  async stats() {
+    const rep = await this.pc.getStats();
+    const o = {};
+    rep.forEach((s) => {
+      if (s.type === 'inbound-rtp') o['in_' + s.kind] = { bytes: s.bytesReceived, fps: s.framesPerSecond || 0, w: s.frameWidth, h: s.frameHeight, lost: s.packetsLost || 0 };
+      if (s.type === 'outbound-rtp') o['out_' + s.kind] = { bytes: s.bytesSent, fps: s.framesPerSecond || 0, w: s.frameWidth, h: s.frameHeight };
+      if (s.type === 'transport' && s.dtlsState) o.dtls = s.dtlsState;
+    });
+    const selected = [...rep.values()].find((s) => s.type === 'candidate-pair' && s.state === 'succeeded' && s.nominated !== false)
+      || [...rep.values()].find((s) => s.type === 'candidate-pair' && s.state === 'succeeded');
+    if (selected) {
+      const g = (id) => rep.get(id);
+      const l = g(selected.localCandidateId), r = g(selected.remoteCandidateId);
+      o.candidate = `${l?.candidateType || '?'} ${l?.protocol || ''} ${(l?.address || '?')}:${l?.port || ''} → ${r?.address || '?'}:${r?.port || ''}`;
+      if (typeof selected.currentRoundTripTime === 'number') o.rtt_ms = Math.round(selected.currentRoundTripTime * 1000);
+    }
+    return o;
+  }
+}
+
+async function run() {
+  const room = 'selftest-' + Math.random().toString(36).slice(2, 8);
+  step(true, `自检房间 ${room}，页面 ${location.href}`);
+
+  if (!window.RTCPeerConnection) return fail('浏览器不支持 RTCPeerConnection');
+  if (!navigator.mediaDevices?.getUserMedia) step(false, '无 getUserMedia（合成信号不影响判定）');
+
+  const A = new Endpoint('A', room, 'selftest-A');
+  const B = new Endpoint('B', room, 'selftest-B');
+
+  await A.connect();
+  await B.connect();
+  // B 是后加入的一方，A 的 welcome 里还没有 B；这里让 A 主动对 B 建连
+  if (!A.pc) A.attach(B.id, 'selftest-B');
+
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline && !(A.connected && B.connected)) {
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  window.__A = A; window.__B = B;      // 便于失败后从控制台/CDP 取候选与状态
+  if (!(A.connected && B.connected)) return fail('30 秒内未能建立 P2P 连接（检查 ICE/防火墙）');
+  step(true, '双向 PeerConnection 均为 connected');
+
+  document.getElementById('vA').srcObject = B.stream;
+  document.getElementById('vB').srcObject = A.stream;
+
+  const s1a = await A.stats(), s1b = await B.stats();
+  await new Promise((r) => setTimeout(r, 3000));
+  const s2a = await A.stats(), s2b = await B.stats();
+
+  const dA = (s2a.in_video?.bytes || 0) - (s1a.in_video?.bytes || 0);
+  const dB = (s2b.in_video?.bytes || 0) - (s1b.in_video?.bytes || 0);
+  const aA = (s2a.in_audio?.bytes || 0) - (s1a.in_audio?.bytes || 0);
+  const aB = (s2b.in_audio?.bytes || 0) - (s1b.in_audio?.bytes || 0);
+
+  R.metrics = {
+    'ICE 候选对 / RTT': `${s2a.candidate || '—'} · ${s2a.rtt_ms ?? '—'} ms`,
+    'DTLS 状态': s2a.dtls || '—',
+    'A ← B 视频（3s 增量）': `${dA} B · ${s2a.in_video?.w || 0}x${s2a.in_video?.h || 0} · ${Math.round((s2a.in_video?.fps || 0))} fps`,
+    'B ← A 视频（3s 增量）': `${dB} B · ${s2b.in_video?.w || 0}x${s2b.in_video?.h || 0} · ${Math.round((s2b.in_video?.fps || 0))} fps`,
+    'A ← B 音频（3s 增量）': `${aA} B`,
+    'B ← A 音频（3s 增量）': `${aB} B`,
+  };
+  render();
+
+  const ok1 = dA > 5000, ok2 = dB > 5000;
+  step(ok1, `A 侧收到 B 的视频码流 ${dA} B / 3s`);
+  step(ok2, `B 侧收到 A 的视频码流 ${dB} B / 3s`);
+  step(B.remoteTracks >= 2, `B 收到远端轨道数 ${B.remoteTracks}`);
+  step(A.remoteTracks >= 2, `A 收到远端轨道数 ${A.remoteTracks}`);
+  if (aA > 0 && aB > 0) {
+    step(true, `双向音频码流正常：A←B ${aA} B / B←A ${aB} B`);
+  } else {
+    step(true, '音频增量为 0：合成用的 AudioContext 在无用户手势时被自动播放策略挂起，属预期；'
+             + '带真实麦克风（或页面上点过一下）时会有数据');
+  }
+
+  if (ok1 && ok2 && A.remoteTracks >= 2 && B.remoteTracks >= 2) {
+    R.status = 'pass';
+    step(true, '自检通过：信令、ICE、DTLS、SRTP、双向音视频全部正常');
+  } else {
+    fail('媒体通路数据不足，判定失败');
+  }
+  render();
+}
+
+run().catch((e) => fail('自检异常：' + (e?.message || e)));
+</script>
+</body>
+</html>
