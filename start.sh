@@ -37,7 +37,7 @@ ensure_local_writable() {
 ensure_local_writable
 
 echo "=============================================================="
-echo " WebRTC A/V Call Demo - start"
+echo " WebRTC Video Call Demo - start"
 echo "=============================================================="
 
 # ---------------------------------------------------------------- 1. Pre-flight checks

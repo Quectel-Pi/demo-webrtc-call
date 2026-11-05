@@ -40,7 +40,7 @@ fi
 
 ARCH="$(uname -m)"
 echo "=============================================================="
-echo " WebRTC A/V Call Demo - install"
+echo " WebRTC Video Call Demo - install"
 echo " Board: $(cat /proc/device-tree/model 2>/dev/null | tr -d '\0' || echo unknown)  ARCH=$ARCH"
 echo " Path: $APP_DIR"
 echo "=============================================================="

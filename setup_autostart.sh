@@ -28,7 +28,7 @@ need_root() { [ "$(id -u)" = 0 ] || { echo "Run as root: sudo bash $0 $ACTION"; 
 write_units() {
   cat > "$SYS_DIR/$SVC_SERVER.service" <<EOF
 [Unit]
-Description=WebRTC A/V Call Demo - signaling + web server
+Description=WebRTC Video Call Demo - signaling + web server
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=60
@@ -50,7 +50,7 @@ EOF
   # Tunnel: cloudflared keeps running in the foreground; ExecStartPost writes the URL into local/ and builds the QR code
   cat > "$SYS_DIR/$SVC_TUNNEL.service" <<EOF
 [Unit]
-Description=Cloudflare quick tunnel for WebRTC A/V Call Demo
+Description=Cloudflare quick tunnel for WebRTC Video Call Demo
 After=network-online.target $SVC_SERVER.service
 Wants=network-online.target
 Requires=$SVC_SERVER.service
@@ -102,7 +102,7 @@ install_kiosk_user_unit() {
   chown -R "$owner:$owner" "$dir" "$APP_DIR/local" 2>/dev/null || true
   cat > "$dir/$KIOSK_USER_UNIT.service" <<EOF
 [Unit]
-Description=WebRTC A/V Call Demo - kiosk browser on the board display
+Description=WebRTC Video Call Demo - kiosk browser on the board display
 After=graphical-session.target
 PartOf=graphical-session.target
 Wants=graphical-session.target
