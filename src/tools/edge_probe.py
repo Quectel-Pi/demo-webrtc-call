@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""本机 CDP 探针：连上 Edge/Chrome 的 remote-debugging 端口，在页面里执行 JS 并打印结果。
+"""Local CDP probe: attach to the Edge/Chrome remote-debugging port, evaluate JS in the page and print the result.
 
-用途：PC 端浏览器要访问 http://169.254.x.x（板子 USB 直连）时，用它在页面里读状态/断言。
-用法：
+Use case: when the PC browser must open http://169.254.x.x (board over USB), read state / assert from inside the page.
+Usage:
   python edge_probe.py --list
   python edge_probe.py --eval "JSON.stringify(window.__selftest)"
 """
@@ -27,10 +27,10 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=9222)
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--eval", default=None)
-    ap.add_argument("--match", default=None, help="只对 URL 含该子串的页面执行")
-    ap.add_argument("--out", default=None, help="把返回的字符串写到文件（用于 dataURL 抓帧）")
-    ap.add_argument("--shot", default=None, help="按手机视口截图到该文件（验证移动端布局）")
-    ap.add_argument("--width", type=int, default=390, help="--shot 的视口宽（默认 iPhone 逻辑宽）")
+    ap.add_argument("--match", default=None, help="only run on pages whose URL contains this substring")
+    ap.add_argument("--out", default=None, help="write the returned string to a file (used for dataURL frame grabs)")
+    ap.add_argument("--shot", default=None, help="screenshot at phone viewport size into this file (checks mobile layout)")
+    ap.add_argument("--width", type=int, default=390, help="viewport width for --shot (iPhone logical width by default)")
     ap.add_argument("--height", type=int, default=844)
     args = ap.parse_args()
 
@@ -42,7 +42,7 @@ def main() -> int:
     if args.match:
         ts = [t for t in ts if args.match in (t.get("url") or "")]
     if not ts:
-        print("没有匹配的页面 target")
+        print("no matching page target")
         return 2
 
     t = ts[-1]
@@ -60,7 +60,7 @@ def main() -> int:
                     raise RuntimeError(f"{method}: {msg['error']}")
                 return msg.get("result", {})
 
-    # --- 手机视口截图：验证移动端布局 ---
+    # --- phone viewport screenshot: verifies the mobile layout ---
     if args.shot:
         import base64, time
         rpc(1, "Emulation.setDeviceMetricsOverride",
@@ -70,13 +70,13 @@ def main() -> int:
         res = rpc(3, "Page.captureScreenshot", {"format": "png", "captureBeyondViewport": False})
         with open(args.shot, "wb") as f:
             f.write(base64.b64decode(res["data"]))
-        print(f"已截图 {args.shot}（{args.width}x{args.height} @2x）")
+        print(f"Saved screenshot {args.shot} ({args.width}x{args.height} @2x)")
         return 0
 
     res = rpc(1, "Runtime.evaluate",
               {"expression": args.eval, "awaitPromise": True, "returnByValue": True})
     if "exceptionDetails" in res:
-        print("JS 异常:", json.dumps(res["exceptionDetails"], ensure_ascii=False)[:800])
+        print("JS exception:", json.dumps(res["exceptionDetails"], ensure_ascii=False)[:800])
         return 1
     v = res.get("result", {}).get("value")
     if args.out and isinstance(v, str):
@@ -86,7 +86,7 @@ def main() -> int:
                 f.write(base64.b64decode(v.split(",", 1)[1]))
             else:
                 f.write(v.encode())
-        print(f"已写入 {args.out} ({len(v)} chars)")
+        print(f"Wrote {args.out} ({len(v)} chars)")
     else:
         print(json.dumps(v, ensure_ascii=False))
     return 0

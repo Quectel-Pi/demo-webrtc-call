@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 从 cloudflared 日志取出隧道地址，写入 local/tunnel-url.txt 并生成二维码。
+# Extract the tunnel URL from the cloudflared log, save it to local/tunnel-url.txt and generate a QR code.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
