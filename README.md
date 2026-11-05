@@ -1,8 +1,8 @@
 English | [中文](README_zh.md)
 
-# WebRTC Audio/Video Call
+# WebRTC Video Call
 
-A WebRTC audio/video calling demo for the Quectel Pi M2.
+A WebRTC video calling demo for the Quectel Pi M2.
 The board is connected to a USB camera and a microphone; a phone opens a web page (by scanning a QR code)
 and starts a two-way video call with the board.
 
@@ -58,15 +58,15 @@ Phone-side UI with live statistics:
 ```
 sudo apt update
 sudo apt install -y git
-git clone https://github.com/Quectel-Pi/demo-webrtc-av-call.git
+git clone https://github.com/Quectel-Pi/demo-webrtc-video-call.git
 ```
 
-A `demo-webrtc-av-call` folder is created in the current directory.
+A `demo-webrtc-video-call` folder is created in the current directory.
 
 2. Run these commands on the board. **Deployment is successful when the terminal shows `Deployment complete`.**
 
 ```
-cd demo-webrtc-av-call
+cd demo-webrtc-video-call
 sudo chmod 755 install.sh
 sudo bash install.sh
 ```
@@ -87,7 +87,7 @@ The terminal prints the phone URL and QR code, and opens the board browser in th
 ## Project Structure
 
 ```
-demo-webrtc-av-call/
+demo-webrtc-video-call/
 ├── docs/assets/                     # Documentation images
 ├── src/
 │   ├── server.py                    # Signaling + static file server (stdlib)
@@ -164,7 +164,7 @@ bash src/tools/camera_node.sh --show
 |---|---|---|
 | Phone page keeps loading | Tunnel down or URL expired | `bash src/tools/tunnel.sh --url`; re-run `bash start.sh` |
 | Phone sees no board picture | Camera not enumerated | `bash src/tools/camera_node.sh --check`, then `sudo bash src/tools/camera_node.sh` and reload |
-| Picture but no sound on iPhone | iOS blocks autoplay with audio | Tap “Enable sound” on the page |
+| Picture but no sound on the phone | Possibly restricted by browser permissions | Try scanning the QR code with WeChat |
 | `connected` but 0 kbps | Camera node held by another process | `lsof /dev/video63`, stop it, reload |
 | Certificate warning | Using `https://<board-ip>:8443` | Use the tunnel URL, or accept once |
 | “No internet, cannot create tunnel” | Board fell back to a network without internet | `nmcli device wifi connect "<ssid>" password "<pw>"` |

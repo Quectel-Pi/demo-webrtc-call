@@ -3,11 +3,11 @@
 
 const STRINGS = {
   zh: {
-    'meta.title': 'WebRTC 音视频演示 · Quectel Pi',
+    'meta.title': 'WebRTC 视频通话 · Quectel Pi',
     'lang.switch': 'EN',
     'lang.name': 'English',
 
-    'brand.title': 'WebRTC 音视频演示',
+    'brand.title': 'WebRTC 视频通话',
     'sig.offline': '未连接信令',
     'sig.connecting': '连接信令…',
     'sig.connected': '信令已连接 · 我是 {id}',
@@ -123,11 +123,11 @@ const STRINGS = {
   },
 
   en: {
-    'meta.title': 'WebRTC Audio/Video Demo · Quectel Pi',
+    'meta.title': 'WebRTC Video Call · Quectel Pi',
     'lang.switch': '中文',
     'lang.name': '中文',
 
-    'brand.title': 'WebRTC Audio/Video Demo',
+    'brand.title': 'WebRTC Video Call',
     'sig.offline': 'Signaling offline',
     'sig.connecting': 'Connecting signaling…',
     'sig.connected': 'Signaling connected · I am {id}',

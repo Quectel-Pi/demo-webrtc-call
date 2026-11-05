@@ -1,8 +1,8 @@
 中文 | [English](README.md)
 
-# WebRTC 音视频通话
+# WebRTC 视频通话
 
-本项目是基于Quectel Pi M2智能主控板上实现的 WebRTC 音视频通话示例。
+本项目是基于Quectel Pi M2智能主控板上实现的 WebRTC 视频通话示例。
 板子接 USB 摄像头和扬声器，手机扫码打开网页就能和板子双向视频通话。
 
 信令服务跑在板子上（Python 标准库，无第三方依赖），手机通过 Cloudflare 免费隧道拿到受信任的
@@ -14,7 +14,7 @@ HTTPS 地址；音视频是 P2P 直连，不经过服务器。
 
 ## 功能
 
-- 板子 ↔ 手机 / PC 双向音视频通话，VP8 / H.264 / Opus 自动协商
+- 板子 ↔ 手机 / PC 双向视频通话，VP8 / H.264 / Opus 自动协商
 - 实时统计：码率、分辨率、帧率、丢包、抖动、RTT、编解码器
 - 摄像头 / 麦克风切换、静音、关闭摄像头、视频码率上限
 - 网页免安装，手机和 PC 用浏览器打开即可
@@ -55,15 +55,15 @@ HTTPS 地址；音视频是 P2P 直连，不经过服务器。
 ```
 sudo apt update
 sudo apt install -y git
-git clone https://github.com/Quectel-Pi/demo-webrtc-av-call.git
+git clone https://github.com/Quectel-Pi/demo-webrtc-video-call.git
 ```
 
-当前目录会生成 `demo-webrtc-av-call` 文件夹。
+当前目录会生成 `demo-webrtc-video-call` 文件夹。
 
 2. 在板子终端依次执行。**终端显示 `Deployment complete` 即部署成功。**
 
 ```
-cd demo-webrtc-av-call
+cd demo-webrtc-video-call
 sudo chmod 755 install.sh
 sudo bash install.sh
 ```
@@ -82,7 +82,7 @@ bash start.sh
 ## 项目结构
 
 ```
-demo-webrtc-av-call/
+demo-webrtc-video-call/
 ├── docs/assets/                     # 文档图片
 ├── src/
 │   ├── server.py                    # 信令 + 静态文件服务（标准库）
@@ -157,7 +157,7 @@ bash src/tools/camera_node.sh --show
 |---|---|---|
 | 手机页面一直加载 | 隧道没起来或地址已失效 | `bash src/tools/tunnel.sh --url`，重跑 `bash start.sh` |
 | 手机看不到板子画面 | 摄像头没被浏览器识别 | `bash src/tools/camera_node.sh --check`，必要时 `sudo bash src/tools/camera_node.sh` 后重开页面 |
-| 手机有画面没声音 | iOS 禁止带声音的自动播放 | 点页面上的「开启声音」 |
+| 手机有画面没声音 | 可能被浏览器权限限制 | 尝试用微信扫码 |
 | 连接成功但码率 0 | 相机被其他进程占用 | `lsof /dev/video63` 查占用，停掉后重开页面 |
 | 证书警告 | 用的是 `https://<板子IP>:8443` | 改用隧道地址，或接受一次警告 |
 | 提示没有外网，无法建立隧道 | 板子连到了没有外网的热点（如公司访客网） | `nmcli device wifi connect "<热点>" password "<密码>"` |
