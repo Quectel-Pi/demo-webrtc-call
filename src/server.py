@@ -163,7 +163,7 @@ MIME = {
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    server_version = "demo-webrtc-video-call/1.0"
+    server_version = "demo-webrtc-call/1.0"
 
     # ---------------------------------------------------------------- utils
     def log_message(self, fmt, *args):

@@ -8,10 +8,10 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 PYTHON_BIN="$(command -v python3 || echo /usr/bin/python3)"
 SYS_DIR=/etc/systemd/system
-SVC_SERVER=webrtc-video-call
-SVC_TUNNEL=webrtc-video-call-tunnel
+SVC_SERVER=webrtc-call
+SVC_TUNNEL=webrtc-call-tunnel
 SVC_CAM=webrtc-camlink
-KIOSK_USER_UNIT="webrtc-video-call-kiosk"
+KIOSK_USER_UNIT="webrtc-call-kiosk"
 PORT="${PORT:-8443}"
 HTTP_PORT="${HTTP_PORT:-8080}"
 ROOM="${ROOM:-demo}"

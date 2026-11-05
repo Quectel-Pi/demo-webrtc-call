@@ -58,15 +58,15 @@ Phone-side UI with live statistics:
 ```
 sudo apt update
 sudo apt install -y git
-git clone https://github.com/Quectel-Pi/demo-webrtc-video-call.git
+git clone https://github.com/Quectel-Pi/demo-webrtc-call.git
 ```
 
-A `demo-webrtc-video-call` folder is created in the current directory.
+A `demo-webrtc-call` folder is created in the current directory.
 
 2. Run these commands on the board. **Deployment is successful when the terminal shows `Deployment complete`.**
 
 ```
-cd demo-webrtc-video-call
+cd demo-webrtc-call
 sudo chmod 755 install.sh
 sudo bash install.sh
 ```
@@ -87,7 +87,7 @@ The terminal prints the phone URL and QR code, and opens the board browser in th
 ## Project Structure
 
 ```
-demo-webrtc-video-call/
+demo-webrtc-call/
 ├── docs/assets/                     # Documentation images
 ├── src/
 │   ├── server.py                    # Signaling + static file server (stdlib)

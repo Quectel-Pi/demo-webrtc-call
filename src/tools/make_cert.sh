@@ -31,7 +31,7 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
 
 openssl req -newkey rsa:2048 -nodes \
   -keyout "$OUT/key.pem" -out "$OUT/cert.csr" \
-  -subj "/C=CN/O=Quectel Pi Demo/CN=webrtc-video-call" >/dev/null 2>&1
+  -subj "/C=CN/O=Quectel Pi Demo/CN=webrtc-call" >/dev/null 2>&1
 
 cat > "$OUT/leaf.ext" <<EXT
 basicConstraints=critical,CA:FALSE

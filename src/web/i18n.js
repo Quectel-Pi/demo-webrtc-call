@@ -3,11 +3,11 @@
 
 const STRINGS = {
   zh: {
-    'meta.title': 'WebRTC 视频通话 · Quectel Pi',
+    'meta.title': 'WebRTC实时视频通话 · Quectel Pi',
     'lang.switch': 'EN',
     'lang.name': 'English',
 
-    'brand.title': 'WebRTC 视频通话',
+    'brand.title': 'WebRTC实时视频通话',
     'sig.offline': '未连接信令',
     'sig.connecting': '连接信令…',
     'sig.connected': '信令已连接 · 我是 {id}',
