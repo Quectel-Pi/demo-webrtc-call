@@ -1,0 +1,9 @@
+# 本项目不依赖任何第三方 Python 包，只需 Python 3 标准库（http.server / ssl / hashlib / socket）。
+# 前端是原生 HTML + JavaScript，没有 npm 依赖。
+#
+# 系统依赖（由 install.sh 用 apt 安装）：
+#   curl  openssl  v4l2-utils  lsof  qrencode  firefox-esr
+# 外部程序（install.sh 自动下载到 /usr/local/bin）：
+#   cloudflared  —— Cloudflare 快速隧道，给手机提供受信任的 https 入口
+#
+# 因此这里保持为空：pip install -r requirements.txt 是安全的空操作。

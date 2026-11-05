@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Capture Probe · demo-webrtc-call</title>
+<style>
+ body{font:14px/1.6 system-ui,"Noto Sans CJK SC",sans-serif;background:#0d1117;color:#e6edf3;padding:24px}
+ h1{font-size:16px} pre{background:#0b1220;border:1px solid #26313f;border-radius:8px;padding:12px;font-size:12px;color:#9fb0c4;white-space:pre-wrap}
+ .ok{color:#7ee2a8}.bad{color:#ffb4b4}
+</style>
+</head>
+<body>
+<h1>摄像头 / 麦克风 采集能力探针</h1>
+<p class="muted">逐个尝试 enumerateDevices 与 getUserMedia 组合，结果自动 POST 到服务器 /report，
+可在另一台机器上 GET /healthz 读取（name=probe）。</p>
+<pre id="out">running…</pre>
+<script>
+'use strict';
+const R = { name: 'probe', ua: navigator.userAgent, href: location.href, secure: isSecureContext,
+            devices: [], attempts: {}, legacy: null };
+const out = document.getElementById('out');
+
+function render() { out.textContent = JSON.stringify(R, null, 2); }
+
+async function report() {
+  render();
+  try {
+    await fetch('/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(R) });
+  } catch (e) { /* ignore */ }
+}
+
+async function attempt(label, constraints) {
+  const t0 = performance.now();
+  try {
+    const s = await navigator.mediaDevices.getUserMedia(constraints);
+    const vt = s.getVideoTracks()[0], at = s.getAudioTracks()[0];
+    R.attempts[label] = {
+      ok: true,
+      ms: Math.round(performance.now() - t0),
+      video: vt ? { label: vt.label, settings: vt.getSettings() } : null,
+      audio: at ? { label: at.label, settings: at.getSettings() } : null,
+    };
+    s.getTracks().forEach((t) => t.stop());
+  } catch (e) {
+    R.attempts[label] = { ok: false, error: `${e.name}: ${e.message}`, ms: Math.round(performance.now() - t0) };
+  }
+  render();
+}
+
+(async () => {
+  try { R.legacy = typeof navigator.getUserMedia !== 'undefined'; } catch (e) {}
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    R.devices = devs.map((d) => ({ kind: d.kind, label: d.label, deviceId: d.deviceId.slice(0, 12) }));
+  } catch (e) { R.devices = [{ error: String(e) }]; }
+  await report();
+
+  await attempt('video_true', { video: true });
+  await attempt('video_720p', { video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } });
+  await attempt('video_640x480', { video: { width: 640, height: 480 } });
+  await attempt('audio_true', { audio: true });
+  await attempt('audio_video', { audio: true, video: { width: { ideal: 1280 }, height: { ideal: 720 } } });
+
+  // 再加一次 enumerateDevices：授权后 label 才会填上
+  try {
+    const devs2 = await navigator.mediaDevices.enumerateDevices();
+    R.devicesAfter = devs2.map((d) => ({ kind: d.kind, label: d.label }));
+  } catch (e) {}
+  R.done = true;
+  await report();
+})();
+</script>
+</body>
+</html>
