@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""极简 WebSocket 客户端（只依赖标准库）
+"""Minimal WebSocket client (standard library only)
 
-给两处用：
-  * scripts/test_signaling.py —— 不开浏览器也能验证信令服务器
-  * gst/webrtc_send.py        —— GStreamer 原生端接入同一套 JSON 信令
+Used by:
+  * src/tools/test_signaling.py -- verify the signaling server without a browser
+  * gst/webrtc_send.py         -- GStreamer native endpoint on the same JSON signaling
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class WSClient:
         self.sock: socket.socket | None = None
         self.buf = b""
 
-    # ------------------------------------------------------------- 连接
+    # ------------------------------------------------------------- connect
     def connect(self, extra_headers: dict | None = None) -> "WSClient":
         raw = socket.create_connection((self.host, self.port), timeout=self.timeout)
         if self.tls:
@@ -49,22 +49,22 @@ class WSClient:
         head = self._read_until(b"\r\n\r\n")
         status = head.split(b"\r\n")[0].decode(errors="replace")
         if "101" not in status:
-            raise ConnectionError("WebSocket 握手失败: " + status)
+            raise ConnectionError("WebSocket handshake failed: " + status)
         accept = base64.b64encode(
             __import__("hashlib").sha1((key + WS_GUID).encode()).digest()
         ).decode()
         if accept.lower() not in head.decode(errors="replace").lower():
-            raise ConnectionError("Sec-WebSocket-Accept 校验失败")
+            raise ConnectionError("Sec-WebSocket-Accept validation failed")
         self.sock.settimeout(self.timeout)
         return self
 
-    # ------------------------------------------------------------- 收发
+    # ------------------------------------------------------------- send / receive
     def _read_until(self, marker: bytes) -> bytes:
         assert self.sock
         while marker not in self.buf:
             chunk = self.sock.recv(4096)
             if not chunk:
-                raise ConnectionError("连接被关闭")
+                raise ConnectionError("Connection closed")
             self.buf += chunk
         head, _, self.buf = self.buf.partition(marker)
         return head + marker
@@ -74,7 +74,7 @@ class WSClient:
         while len(self.buf) < n:
             chunk = self.sock.recv(max(4096, n - len(self.buf)))
             if not chunk:
-                raise ConnectionError("连接被关闭")
+                raise ConnectionError("Connection closed")
             self.buf += chunk
         out, self.buf = self.buf[:n], self.buf[n:]
         return out
@@ -93,7 +93,7 @@ class WSClient:
         self.sock.sendall(head + key + masked)
 
     def recv(self) -> tuple[int, bytes]:
-        """返回 (opcode, payload)。0x1/0x2 数据帧，0x8 close。"""
+        """Return (opcode, payload). 0x1/0x2 are data frames, 0x8 is close."""
         h = self._read_exact(2)
         opcode = h[0] & 0x0F
         masked = bool(h[1] & 0x80)
@@ -112,7 +112,7 @@ class WSClient:
         while True:
             opcode, data = self.recv()
             if opcode == 0x8:
-                raise ConnectionError("服务器关闭连接")
+                raise ConnectionError("Server closed the connection")
             if opcode not in (0x1, 0x2):
                 continue
             msg = json.loads(data.decode("utf-8", "replace"))

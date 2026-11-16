@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Cloudflare 快速隧道：给手机一个受信任的 HTTPS 地址。
-# 手机浏览器只在受信任的 HTTPS 下才给摄像头，板子的自签证书装不进手机。
-# 不需要注册账号；隧道只承担信令，音视频仍是 P2P 直连。
+# Cloudflare quick tunnel: gives the phone a trusted HTTPS URL.
+# Mobile browsers only expose the camera on a trusted HTTPS origin, and the board's self-signed CA cannot be installed on the phone.
+# No account needed; the tunnel carries signaling only, audio/video stays peer-to-peer.
 #
-#   bash src/tools/tunnel.sh            # 启动并打印地址/二维码
-#   bash src/tools/tunnel.sh --url      # 查看当前地址
-#   bash src/tools/tunnel.sh --stop     # 停止
+#   bash src/tools/tunnel.sh            # start and print URL / QR code
+#   bash src/tools/tunnel.sh --url      # show the current URL
+#   bash src/tools/tunnel.sh --stop     # stop
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -34,38 +34,38 @@ stop_tunnel() {
 }
 
 case "${1:-}" in
-  --stop) stop_tunnel; echo "隧道已停止"; exit 0;;
-  --url)  [ -f "$URLFILE" ] && cat "$URLFILE" || echo "(还没有地址，先运行 bash start.sh)"; exit 0;;
+  --stop) stop_tunnel; echo "Tunnel stopped"; exit 0;;
+  --url)  [ -f "$URLFILE" ] && cat "$URLFILE" || echo "(no URL yet, run bash start.sh first)"; exit 0;;
   -h|--help) sed -n '2,15p' "$0"; exit 0;;
 esac
 
 find_bin || {
-  echo "❌ 找不到 cloudflared，请先运行 ./install.sh（会下载并安装它）"
+  echo "❌ cloudflared not found. Run ./install.sh first (it downloads and installs it)"
   exit 1
 }
 
-# 后端必须先活着，否则隧道起来也是 502
+# The backend must be up first, otherwise the tunnel only returns 502
 if ! curl -sf -o /dev/null "http://127.0.0.1:$PORT/healthz"; then
-  echo "❌ 后端 http://127.0.0.1:$PORT 未运行，请先运行 bash start.sh"
+  echo "❌ Backend http://127.0.0.1:$PORT is not running. Run bash start.sh first"
   exit 1
 fi
 
-# 快速隧道需要在 Cloudflare 那边建隧道，板子必须能上外网
+# A quick tunnel is created on Cloudflare's side, so the board needs internet access
 if ! curl -sf -m 8 -o /dev/null https://www.cloudflare.com/cdn-cgi/trace; then
-  echo "❌ 板子当前没有外网，无法建立 Cloudflare 隧道"
-  echo "   检查： ping -c2 223.5.5.5 ；  nmcli -t -f NAME,DEVICE,STATE connection show --active"
-  echo "   没有外网时仍可局域网内使用（手机需要信任 src/certs/ca.pem，不好操作，建议先修好外网）"
+  echo "❌ The board has no internet access; cannot create the Cloudflare tunnel"
+  echo "   Check: ping -c2 1.1.1.1 ;  nmcli -t -f NAME,DEVICE,STATE connection show --active"
+  echo "   LAN access still works without internet (the phone would have to trust src/certs/ca.pem, which is painful; fixing internet is easier)"
   exit 1
 fi
 
 stop_tunnel
 : > "$LOG"
-echo "==> 正在建立 Cloudflare 快速隧道 ..."
+echo "==> Creating Cloudflare quick tunnel ..."
 setsid nohup "$BIN" tunnel --url "http://127.0.0.1:$PORT" --no-autoupdate > "$LOG" 2>&1 < /dev/null &
 
 URL=""
 for _ in $(seq 1 40); do
-  # 只认随机三段式域名，排除日志里出现的 https://api.trycloudflare.com
+  # Only accept the random three-part hostname; ignore https://api.trycloudflare.com in the log
   URL="$(grep -oE 'https://[a-z0-9]+(-[a-z0-9]+)+\.trycloudflare\.com' "$LOG" 2>/dev/null \
         | grep -v '^https://api\.' | head -1)"
   [ -n "$URL" ] && break
@@ -74,32 +74,32 @@ for _ in $(seq 1 40); do
 done
 
 if [ -z "$URL" ]; then
-  echo "❌ 没能拿到隧道地址，日志里的原因："
+  echo "❌ Could not obtain a tunnel URL. Reason from the log:"
   grep -E "failed|ERR" "$LOG" | tail -5 | sed 's/^/   /'
-  echo "   常见原因：板子没有外网 / 公司网络限制出站 / Cloudflare 临时故障（等一会重试）"
+  echo "   Common causes: no internet / corporate egress filtering / temporary Cloudflare outage (retry in a minute)"
   exit 1
 fi
 
 PHONE_URL="$URL/?room=demo"
 printf '%s\n' "$URL" > "$URLFILE"
 
-# 二维码：终端里直接显示 + 存一张 PNG 方便投到大屏
+# QR code: printed in the terminal and saved as a PNG for a big screen
 QR_OK=0
 if command -v qrencode >/dev/null 2>&1; then
   qrencode -o "$QRFILE" -s 8 -m 2 "$PHONE_URL" 2>/dev/null && QR_OK=1
 fi
 
 echo
-echo "==================== 手机访问地址 ===================="
+echo "==================== Phone URL ===================="
 echo "  $PHONE_URL"
 echo "======================================================"
-echo "  手机操作：连上跟板子相同的网络 → 打开上面的地址/扫码 → 点「加入房间」→ 允许摄像头和麦克风"
-echo "  板端会自动以 Board 身份加入同一房间（见 start.sh 输出）"
-echo "  地址已写入 $URLFILE ；二维码：${QRFILE}"
+echo "  On the phone: join the same network -> open the URL / scan the code -> "Join room" -> allow camera and microphone"
+echo "  The board joins the same room as "Board" automatically (see start.sh output)"
+echo "  URL saved to $URLFILE ; QR: ${QRFILE}"
 echo
 if [ "$QR_OK" = 1 ]; then
-  echo "  手机扫这个码（或直接输入上面的网址）："
+  echo "  Scan this code with the phone (or type the URL above):"
   qrencode -t ANSIUTF8 "$PHONE_URL"
 else
-  echo "  （没装 qrencode，终端不显示二维码；sudo apt install -y qrencode 后可显示）"
+  echo "  (qrencode not installed, so no QR in the terminal; install it with: sudo apt install -y qrencode)"
 fi

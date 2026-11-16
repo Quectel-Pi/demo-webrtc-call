@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# 生成本地 CA + 服务器证书，供 https:8443 使用。
-# 用 CA 签发（而不是裸自签）是为了 PC 端把 ca.pem 装进信任库后不再弹拦截页。
-# 手机端不需要它，手机走隧道拿真证书。
-# 产物：src/certs/{ca.pem,cert.pem,key.pem}
+# Generate a local CA + server certificate for https:8443.
+# Signing with a CA (instead of a bare self-signed cert) lets a PC trust ca.pem once and stop seeing warnings.
+# Phones do not need it: they reach the page through the tunnel with a trusted certificate.
+# Output: src/certs/{ca.pem,cert.pem,key.pem}
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -10,7 +10,7 @@ OUT="$HERE/../certs"
 mkdir -p "$OUT"
 
 if [ -f "$OUT/cert.pem" ] && [ -f "$OUT/ca.pem" ] && [ "${FORCE:-0}" != "1" ]; then
-  echo "  证书已存在，跳过（FORCE=1 可重新生成）"
+  echo "  Certificate already exists, skipping (set FORCE=1 to regenerate)"
   exit 0
 fi
 
@@ -45,5 +45,5 @@ openssl x509 -req -in "$OUT/cert.csr" -CA "$OUT/ca.pem" -CAkey "$OUT/ca.key" \
 rm -f "$OUT/cert.csr" "$OUT/leaf.ext" "$OUT/ca.srl"
 chmod 600 "$OUT/key.pem" "$OUT/ca.key"
 
-echo "  证书已生成：$OUT"
+echo "  Certificate generated: $OUT"
 echo "  $(openssl x509 -in "$OUT/cert.pem" -noout -ext subjectAltName | tail -1 | tr -s ' ')"
